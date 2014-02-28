@@ -17,3 +17,15 @@ class InsufficientData(Exception):
             return 'No ' + str(self.name) + ' ' + str(self.error_type)
         else:
             return 'No ' + str(self.name) + ' ' + str(self.error_type) + ' (at ' + str(self.path) + ')'
+
+
+class EmptyDatabase(Exception):
+    def __init__(self, path, uncounted=False):
+        self.path = path
+        self.uncounted = uncounted
+
+    def __str__(self):
+        if self.uncounted is False:
+            return 'Database at ' + str(self.path) + ' is empty, run prepopulate() first'
+        else:
+            return 'Run prepopulate() first to get number of rows in database'
