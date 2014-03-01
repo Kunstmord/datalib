@@ -20,12 +20,8 @@ class InsufficientData(Exception):
 
 
 class EmptyDatabase(Exception):
-    def __init__(self, path, uncounted=False):
+    def __init__(self, path):
         self.path = path
-        self.uncounted = uncounted
 
     def __str__(self):
-        if self.uncounted is False:
-            return 'Database at ' + str(self.path) + ' is empty, run prepopulate() first'
-        else:
-            return 'Run prepopulate() first to get number of rows in database'
+        return 'Database at ' + str(self.path) + ' is empty, run prepopulate() first'
