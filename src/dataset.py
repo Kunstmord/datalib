@@ -59,12 +59,16 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
+    a = 0
     for i in session.query(set_object).order_by(set_object.id):
         if i.features is None:
             i.features = {extractor_name: extractor(join(folder_path, i.path), *args)}
         else:
             if (extractor_name not in i.features) or force_extraction is True:
                 i.features[extractor_name] = extractor(join(folder_path, i.path), *args)
+        if a % 500 == 0:
+            print a
+        a += 1
     session.commit()
     session.close()
     return None
@@ -169,6 +173,51 @@ def return_features_numpy_base(dbpath, set_object, points_amt, names):
                         return_array[i[0], counter] = feature_val
                         counter += 1
     return return_array
+
+
+def return_real_id_base(dbpath, set_object):
+    """
+    Generic function which returns a list of real_id's
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+
+    Returns
+    -------
+    A list of real_id values for the dataset (a real_id is the filename minus the suffix and prefix)
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    return_list = []
+    for i in session.query(set_object).order_by(set_object.id):
+        return_list.append(i.real_id)
+    return return_list
+
+
+def return_feature_list_base(dbpath, set_object):
+    """
+    Generic function which returns a list of the names of all available features
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+
+    Returns
+    -------
+    A list of strings corresponding to all available features
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    return_list = []
+    tmp_object = session.query(set_object).get(1)
+    for feature in tmp_object.features:
+        return_list.append(feature)
+    return return_list
 
 
 class DataSetBase:
@@ -312,6 +361,37 @@ class UnlabeledDataSet(DataSetBase):
             raise errors.EmptyDatabase(self.dbpath)
         else:
             return return_features_numpy_base(self.dbpath, testset.TestSet, self.points_amt, names)
+
+    def return_real_id(self):
+        """
+        Generic function which returns a list of real_id's
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        A list of real_id values for the dataset (a real_id is the filename minus the suffix and prefix)
+        """
+        if self._prepopulated is False:
+            raise errors.EmptyDatabase(self.dbpath)
+        else:
+            return return_real_id_base(self.dbpath, testset.TestSet)
+
+    def return_feature_list(self):
+        """
+        Generic function which returns a list of the names of all available features
+
+        Parameters
+        ----------
+        dbpath : string, path to SQLite database file
+        set_object : object (either TestSet or TrainSet) which is stored in the database
+
+        Returns
+        -------
+        A list of strings corresponding to all available features
+        """
+        return return_feature_list_base(self.dbpath, testset.TestSet)
 
 
 class LabeledDataSet(DataSetBase):
@@ -506,3 +586,34 @@ class LabeledDataSet(DataSetBase):
                     return_array[i[0], :] = i[1].labels['original']
             session.close()
             return return_array
+
+    def return_real_id(self):
+        """
+        Generic function which returns a list of real_id's
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        A list of real_id values for the dataset (a real_id is the filename minus the suffix and prefix)
+        """
+        if self._prepopulated is False:
+            raise errors.EmptyDatabase(self.dbpath)
+        else:
+            return return_real_id_base(self.dbpath, trainset.TrainSet)
+
+    def return_feature_list(self):
+        """
+        Generic function which returns a list of the names of all available features
+
+        Parameters
+        ----------
+        dbpath : string, path to SQLite database file
+        set_object : object (either TestSet or TrainSet) which is stored in the database
+
+        Returns
+        -------
+        A list of strings corresponding to all available features
+        """
+        return return_feature_list_base(self.dbpath, trainset.TrainSet)
