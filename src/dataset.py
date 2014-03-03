@@ -364,7 +364,7 @@ class UnlabeledDataSet(DataSetBase):
 
     def return_real_id(self):
         """
-        Generic function which returns a list of real_id's
+        Returns a list of real_id's
 
         Parameters
         ----------
@@ -380,12 +380,10 @@ class UnlabeledDataSet(DataSetBase):
 
     def return_feature_list(self):
         """
-        Generic function which returns a list of the names of all available features
+        Returns a list of the names of all available features
 
         Parameters
         ----------
-        dbpath : string, path to SQLite database file
-        set_object : object (either TestSet or TrainSet) which is stored in the database
 
         Returns
         -------
@@ -589,7 +587,7 @@ class LabeledDataSet(DataSetBase):
 
     def return_real_id(self):
         """
-        Generic function which returns a list of real_id's
+        Returns a list of real_id's
 
         Parameters
         ----------
@@ -605,12 +603,10 @@ class LabeledDataSet(DataSetBase):
 
     def return_feature_list(self):
         """
-        Generic function which returns a list of the names of all available features
+        Returns a list of the names of all available features
 
         Parameters
         ----------
-        dbpath : string, path to SQLite database file
-        set_object : object (either TestSet or TrainSet) which is stored in the database
 
         Returns
         -------
