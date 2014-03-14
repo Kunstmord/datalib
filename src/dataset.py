@@ -1,43 +1,20 @@
-from src import trainset, testset, errors
-
 __author__ = 'George Oblapenko'
 __license__ = "GPL"
 __maintainer__ = "George Oblapenko"
 __email__ = "kunstmord@kunstmord.com"
-__status__ = "Development"
 
 from os.path import join, isfile
 from os import walk
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import numpy as np
-import csv
+import trainset
+import testset
+import errors
+from misc import cutoff_filename
 
 
-def cutoff_filename(prefix, suffix, input_str):
-    """
-    Cuts off the start and end of a string, as specified by 2 parameters
-
-    Parameters
-    ----------
-    prefix : string, if input_str starts with prefix, will cut off prefix
-    suffix : string, if input_str end with suffix, will cut off suffix
-    input_str : the string to be processed
-
-    Returns
-    -------
-    A string, from which the start and end have been cut
-    """
-    if prefix is not '':
-        if input_str.startswith(prefix):
-            input_str = input_str[len(prefix):]
-    if suffix is not '':
-        if input_str.endswith(suffix):
-            input_str = input_str[:-len(suffix)]
-    return input_str
-
-
-def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False, *args):
+def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False, verbose=0, *args):
     """
     Generic function which extracts a feature and stores it in the database
 
@@ -48,7 +25,10 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
     set_object : object (either TestSet or TrainSet) which is stored in the database
     extractor : function, which takes the path of a data point and *args as parameters and returns a feature
     force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
-    exists in the database, otherwise, will only extract a new feature
+    exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
+    default value: False
+    verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
+    ever verbose steps (for example, verbose=500 will print 0, 500, 1000 etc.). default value: 0
     *args : optional arguments for the extractor
 
     Returns
@@ -60,15 +40,71 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
     a = 0
-    for i in session.query(set_object).order_by(set_object.id):
-        if i.features is None:
+
+    tmp_object = session.query(set_object).get(1)
+    if tmp_object.features is None:
+        for i in session.query(set_object).order_by(set_object.id):
             i.features = {extractor_name: extractor(join(folder_path, i.path), *args)}
-        else:
-            if (extractor_name not in i.features) or force_extraction is True:
-                i.features[extractor_name] = extractor(join(folder_path, i.path), *args)
-        if a % 500 == 0:
-            print a
-        a += 1
+            if verbose > 0:
+                if a % verbose == 0:
+                    print a
+            a += 1
+    elif (extractor_name not in tmp_object.features) or force_extraction is True:
+        for i in session.query(set_object).order_by(set_object.id):
+            i.features[extractor_name] = extractor(join(folder_path, i.path), *args)
+            if verbose > 0:
+                if a % verbose == 0:
+                    print a
+            a += 1
+    session.commit()
+    session.close()
+    return None
+
+
+def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False,
+                                           verbose=0, *args):
+    """
+    Generic function which extracts a feature which may be dependent on other features and stores it in the database
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    folder_path : string, path to folder where the files are stored
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    extractor : function, which takes the path of a data point, a dictionary of all other features and *args as
+    parameters and returns a feature
+    force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
+    exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
+    default value: False
+    verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
+    ever verbose steps (for example, verbose=500 will print 0, 500, 1000 etc.). default value: 0
+    *args : optional arguments for the extractor
+
+    Returns
+    -------
+    None
+    """
+    extractor_name = extractor.__name__
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    a = 0
+
+    tmp_object = session.query(set_object).get(1)
+    if tmp_object.features is None:
+        for i in session.query(set_object).order_by(set_object.id):
+            i.features = {extractor_name: extractor(join(folder_path, i.path), None, *args)}
+            if verbose > 0:
+                if a % verbose == 0:
+                    print a
+            a += 1
+    elif (extractor_name not in tmp_object.features) or force_extraction is True:
+        for i in session.query(set_object).order_by(set_object.id):
+            i.features[extractor_name] = extractor(join(folder_path, i.path), tmp_object.features, *args)
+            if verbose > 0:
+                if a % verbose == 0:
+                    print a
+            a += 1
     session.commit()
     session.close()
     return None
@@ -220,6 +256,76 @@ def return_feature_list_base(dbpath, set_object):
     return return_list
 
 
+def return_feature_list_numpy_base(dbpath, set_object):
+    """
+    Generic function which returns a list of tuples containing, each containing the name of the feature
+    and the length of the corresponding 1d numpy array of the feature (or length of the list)
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+
+    Returns
+    -------
+    A list of tuples containing the name of the feature and the length of the corresponding list or 1d numpy array
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    return_list = []
+    tmp_object = session.query(set_object).get(1)
+    for feature in tmp_object.features:
+        if type(tmp_object.features[feature]) is np.ndarray:
+            flength = tmp_object.features[feature].shape[0]
+        else:
+            flength = 1
+        return_list.append((feature, flength))
+    return return_list
+
+
+def copy_features_base(dbpath_origin, dbpath_destination, set_object, force_copy=False):
+    """
+    Generic function which copies features from one database to another (base object should be of the same type)
+
+    Parameters
+    ----------
+    dbpath_origin : string, path to SQLite database file from which the features will be copied
+    dbpath_destination : string, path to SQLite database file to which the features will be copied
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    force_copy : boolean, if True - will overwrite features with same name when copying, if False, won't;
+    default value: False
+
+    Returns
+    -------
+    None
+    """
+    engine_origin = create_engine('sqlite:////' + dbpath_origin)
+    engine_destination = create_engine('sqlite:////' + dbpath_destination)
+    session_cl_origin = sessionmaker(bind=engine_origin)
+    session_cl_destination = sessionmaker(bind=engine_destination)
+    session_origin = session_cl_origin()
+    session_destination = session_cl_destination()
+    if force_copy is True:
+        for i in session_origin.query(set_object).order_by(set_object.id):
+            dest_obj = session_destination.query(set_object).get(i.id)
+            for feature in i.features:
+                if dest_obj.features is not None:
+                    dest_obj.features[feature] = i.features[feature]
+                else:
+                    dest_obj.features = {feature: i.features[feature]}
+    else:
+        for i in session_origin.query(set_object).order_by(set_object.id):
+            dest_obj = session_destination.query(set_object).get(i.id)
+            for feature in i.features:
+                if dest_obj.features is not None:
+                    if (feature not in dest_obj.features) or force_copy is True:
+                        dest_obj.features[feature] = i.features[feature]
+                else:
+                    dest_obj.features = {feature: i.features[feature]}
+    return None
+
+
 class DataSetBase:
     """
     Generic class for a data set. Assumes that each data point is a separate file in the same directory.
@@ -233,17 +339,21 @@ class DataSetBase:
 
     Initialization parameters
     ----------
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    db_base : declarative_base, used to create the engine (either testset.Base or trainset.Base)
     path_to_set : string, path to the folder containing the data point files
     path_to_db : string, path to the folder where the SQLite database is stored
     db_name : string, name of the SQLite database file
     file_prefix : string to cut off from start of filename when creating the 'real_id' field for data point
     file_suffix : string to cut off from end of filename when creating the 'real_id' field for data point
     """
-    def __init__(self, path_to_set, path_to_db, db_name, file_prefix, file_suffix):
+    def __init__(self, set_object, db_base, path_to_set, path_to_db, db_name, file_prefix, file_suffix):
         self.path_to_set = path_to_set
 
         self.file_prefix = file_prefix
         self.file_suffix = file_suffix
+        self._set_object = set_object
+        self._db_base = db_base
         dbpath = join(path_to_db, db_name)
         if isfile(dbpath):
             self._prepopulated = True
@@ -254,25 +364,6 @@ class DataSetBase:
             for (dirpath, dirnames, filenames) in walk(self.path_to_set):
                 self.points_amt = len(filenames)
         self.dbpath = dbpath
-
-
-class UnlabeledDataSet(DataSetBase):
-    """
-    A class for a data set where each data point has no label associated with it
-
-    Initialization parameters
-    ----------
-    path_to_set : string, path to the folder containing the data point files
-    path_to_db : string, path to the folder where the SQLite database is stored
-    custom_name : string, optional, name of database file, default value: 'test.db'
-    file_prefix : string, optional, string to cut off from start of filename when creating the 'real_id' field for
-    data point, default value: ''
-    file_suffix : string, optional, string to cut off from end of filename when creating the 'real_id' field for
-    data point, default value: ''
-
-    """
-    def __init__(self, path_to_set, path_to_db, custom_name='test.db', file_prefix='', file_suffix=''):
-        DataSetBase.__init__(self, path_to_set, path_to_db, custom_name, file_prefix, file_suffix)
 
     def prepopulate(self):
         """
@@ -288,22 +379,22 @@ class UnlabeledDataSet(DataSetBase):
         """
         if self._prepopulated is False:
             engine = create_engine('sqlite:////' + self.dbpath)
-            testset.Base.metadata.create_all(engine)
+            self._db_base.metadata.create_all(engine)
             self._prepopulated = True
             session_cl = sessionmaker(bind=engine)
             session = session_cl()
 
             for (dirpath, dirnames, filenames) in walk(self.path_to_set):
                 for f_name in filenames:
-                    datapoint = testset.TestSet(real_id=cutoff_filename(self.file_prefix, self.file_suffix, f_name),
-                                                path=f_name, features=None)
+                    datapoint = self._set_object(real_id=cutoff_filename(self.file_prefix, self.file_suffix, f_name),
+                                                 path=f_name, features=None)
                     session.add(datapoint)
                     self.points_amt += 1
             session.commit()
             session.close()
         return None
 
-    def extract_feature(self, extractor, force_extraction=False, *args):
+    def extract_feature(self, extractor, force_extraction=False, verbose=0, *args):
         """
         Extracts a feature and stores it in the database
 
@@ -311,7 +402,9 @@ class UnlabeledDataSet(DataSetBase):
         ----------
         extractor : function, which takes the path of a data point and *args as parameters and returns a feature
         force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
-        exists in the database, otherwise, will only extract a new feature
+        exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
+        default value: False
+        verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
         *args : optional arguments for the extractor
 
         Returns
@@ -321,8 +414,32 @@ class UnlabeledDataSet(DataSetBase):
         if self._prepopulated is False:
             raise errors.EmptyDatabase(self.dbpath)
         else:
-            return extract_feature_base(self.dbpath, self.path_to_set, testset.TestSet, extractor, force_extraction,
-                                        *args)
+            return extract_feature_base(self.dbpath, self.path_to_set, self._set_object, extractor, force_extraction,
+                                        verbose, *args)
+
+    def extract_feature_dependent_feature(self, extractor, force_extraction=False, verbose=0, *args):
+        """
+        Extracts a feature which may be dependent on other features and stores it in the database
+
+        Parameters
+        ----------
+        extractor : function, which takes the path of a data point, a dictionary of all other features and *args as
+        parameters and returns a feature
+        force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
+        exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
+        default value: False
+        verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
+        *args : optional arguments for the extractor
+
+        Returns
+        -------
+        None
+        """
+        if self._prepopulated is False:
+            raise errors.EmptyDatabase(self.dbpath)
+        else:
+            return extract_feature_dependent_feature_base(self.dbpath, self.path_to_set, self._set_object, extractor,
+                                                          force_extraction, verbose, *args)
 
     def return_features(self, names='all'):
         """
@@ -341,7 +458,7 @@ class UnlabeledDataSet(DataSetBase):
         if self._prepopulated is False:
             raise errors.EmptyDatabase(self.dbpath)
         else:
-            return return_features_base(self.dbpath, testset.TestSet, names)
+            return return_features_base(self.dbpath, self._set_object, names)
 
     def return_features_numpy(self, names='all'):
         """
@@ -360,7 +477,7 @@ class UnlabeledDataSet(DataSetBase):
         if self._prepopulated is False:
             raise errors.EmptyDatabase(self.dbpath)
         else:
-            return return_features_numpy_base(self.dbpath, testset.TestSet, self.points_amt, names)
+            return return_features_numpy_base(self.dbpath, self._set_object, self.points_amt, names)
 
     def return_real_id(self):
         """
@@ -376,7 +493,7 @@ class UnlabeledDataSet(DataSetBase):
         if self._prepopulated is False:
             raise errors.EmptyDatabase(self.dbpath)
         else:
-            return return_real_id_base(self.dbpath, testset.TestSet)
+            return return_real_id_base(self.dbpath, self._set_object)
 
     def return_feature_list(self):
         """
@@ -389,7 +506,58 @@ class UnlabeledDataSet(DataSetBase):
         -------
         A list of strings corresponding to all available features
         """
-        return return_feature_list_base(self.dbpath, testset.TestSet)
+        return return_feature_list_base(self.dbpath, self._set_object)
+
+    def return_feature_list_numpy(self):
+        """
+        Returns a list of tuples containing, each containing the name of the feature and the length of the
+        corresponding 1d numpy array of the feature (or length of the list)
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        A list of tuples containing the name of the feature and the length of the corresponding list or 1d numpy array
+        """
+        return_feature_list_numpy_base(self.dbpath, self._set_object)
+
+    def copy_features(self, dbpath_origin, force_copy=False):
+        """
+        Copies features from one database to another (base object should be of the same type)
+
+        Parameters
+        ----------
+        dbpath_origin : string, path to SQLite database file from which the features will be copied
+        force_copy : boolean, if True - will overwrite features with same name when copying, if False, won't;
+        default value: False
+
+        Returns
+        -------
+        None
+        """
+        copy_features_base(dbpath_origin, self.dbpath, self._set_object, force_copy)
+        return None
+
+
+class UnlabeledDataSet(DataSetBase):
+    """
+    A class for a data set where each data point has no label associated with it
+
+    Initialization parameters
+    ----------
+    path_to_set : string, path to the folder containing the data point files
+    path_to_db : string, path to the folder where the SQLite database is stored
+    custom_name : string, optional, name of database file, default value: 'test.db'
+    file_prefix : string, optional, string to cut off from start of filename when creating the 'real_id' field for
+    data point, default value: ''
+    file_suffix : string, optional, string to cut off from end of filename when creating the 'real_id' field for
+    data point, default value: ''
+
+    """
+    def __init__(self, path_to_set, path_to_db, custom_name='test.db', file_prefix='', file_suffix=''):
+        DataSetBase.__init__(self, testset.TestSet, testset.Base, path_to_set, path_to_db, custom_name, file_prefix,
+                             file_suffix)
 
 
 class LabeledDataSet(DataSetBase):
@@ -420,107 +588,8 @@ class LabeledDataSet(DataSetBase):
         self.delimiter = delimiter
         self.label_dict = label_dict
 
-        DataSetBase.__init__(self, path_to_set, path_to_db, custom_name, file_prefix, file_suffix)
-
-    def prepopulate(self):
-        """
-        Creates a database file (if it doesn't exist, writes each data point's path, real_id into it)
-
-        Parameters
-        ----------
-        self
-
-        Returns
-        -------
-        None
-        """
-        if self._prepopulated is False:
-            engine = create_engine('sqlite:////' + self.dbpath)
-            trainset.Base.metadata.create_all(engine)
-            self._prepopulated = True
-            session_cl = sessionmaker(bind=engine)
-            session = session_cl()
-
-            labels_csv = open(self.path_to_labels, 'r')
-            reader = csv.reader(labels_csv, delimiter=self.delimiter)
-            if self.label_header is True:
-                labels = reader.next()
-            for (dirpath, dirnames, filenames) in walk(self.path_to_set):
-                for f_name in filenames:
-                    labels = reader.next()
-                    labels = labels[1:]  # strip first piece, it's the file ID - should probably check with filename?
-                    writeable_labels = {'original': labels}
-                    if self.label_dict is not None:
-                        for label_transform in self.label_dict:
-                            if label_transform in labels:
-                                labels[labels.index(label_transform)] = self.label_dict[label_transform]
-                    writeable_labels['transformed'] = labels
-                    datapoint = trainset.TrainSet(real_id=cutoff_filename(self.file_prefix, self.file_suffix, f_name),
-                                                  labels=writeable_labels, path=f_name, features=None)
-                    session.add(datapoint)
-                    self.points_amt += 1
-            session.commit()
-            session.close()
-        return None
-
-    def extract_feature(self, extractor, force_extraction=False, *args):
-        """
-        Extracts a feature and stores it in the database
-
-        Parameters
-        ----------
-        extractor : function, which takes the path of a data point and *args as parameters and returns a feature
-        force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
-        exists in the database, otherwise, will only extract a new feature
-        *args : optional arguments for the extractor
-
-        Returns
-        -------
-        None
-        """
-        if self._prepopulated is False:
-            raise errors.EmptyDatabase(self.dbpath)
-        else:
-            extract_feature_base(self.dbpath, self.path_to_set, trainset.TrainSet, extractor, force_extraction, *args)
-        return None
-
-    def return_features(self, names='all'):
-        """
-        Returns a list of extracted features from the database
-
-        Parameters
-        ----------
-        names : list of strings, a list of feature names which are to be retrieved from the database, if equal
-        to 'all', the all features will be returned, default value: 'all'
-
-        Returns
-        -------
-        A list of lists, each 'inside list' corresponds to a single data point, each element of the 'inside list' is a
-        feature (can be of any type)
-        """
-        if self._prepopulated is False:
-            raise errors.EmptyDatabase(self.dbpath)
-        else:
-            return return_features_base(self.dbpath, trainset.TrainSet, names)
-
-    def return_features_numpy(self, names='all'):
-        """
-        Returns a 2d numpy array of extracted features
-
-        Parameters
-        ----------
-        names : list of strings, a list of feature names which are to be retrieved from the database, if equal to 'all',
-        all features will be returned, default value: 'all'
-
-        Returns
-        -------
-        A numpy array of features, each row corresponds to a single datapoint. If a single feature is a 1d numpy array,
-        then it will be unrolled into the resulting array. Higher-dimensional numpy arrays are not supported.
-        """
-        if self._prepopulated is False:
-            raise errors.EmptyDatabase(self.dbpath)
-        else:
-            return return_features_numpy_base(self.dbpath, trainset.TrainSet, self.points_amt, names)
+        DataSetBase.__init__(self, trainset.TrainSet, trainset.Base, path_to_set, path_to_db, custom_name, file_prefix,
+                             file_suffix)
 
     def return_labels(self, original=False):
         """
@@ -584,32 +653,3 @@ class LabeledDataSet(DataSetBase):
                     return_array[i[0], :] = i[1].labels['original']
             session.close()
             return return_array
-
-    def return_real_id(self):
-        """
-        Returns a list of real_id's
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        A list of real_id values for the dataset (a real_id is the filename minus the suffix and prefix)
-        """
-        if self._prepopulated is False:
-            raise errors.EmptyDatabase(self.dbpath)
-        else:
-            return return_real_id_base(self.dbpath, trainset.TrainSet)
-
-    def return_feature_list(self):
-        """
-        Returns a list of the names of all available features
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        A list of strings corresponding to all available features
-        """
-        return return_feature_list_base(self.dbpath, trainset.TrainSet)
