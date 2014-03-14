@@ -5,6 +5,7 @@ datalib
 Provides a library which simplifies processing and extracting features (for machine learning) from files.
 Stores features in a SQLite database, has label transformation options, functions which convert features to NumPy arrays,
 etc.
+Original idea and feature list by Viktor Evstratov (viktor.evst@gmail.com).
 Originally designed for use with the Galaxy Zoo challenge on Kaggle.
 Requires numpy and SQLAlchemy.
 
