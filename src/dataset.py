@@ -520,7 +520,7 @@ class DataSetBase:
         -------
         A list of tuples containing the name of the feature and the length of the corresponding list or 1d numpy array
         """
-        return_feature_list_numpy_base(self.dbpath, self._set_object)
+        return return_feature_list_numpy_base(self.dbpath, self._set_object)
 
     def copy_features(self, dbpath_origin, force_copy=False):
         """
