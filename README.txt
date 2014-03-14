@@ -1,5 +1,5 @@
 ===========
-KaggleLib
+datalib
 ===========
 
 Provides a library which simplifies processing and extracting features (for machine learning) from files.
