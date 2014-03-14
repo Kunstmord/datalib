@@ -1,22 +1,30 @@
-from os import path
+"""An example (for the galaxy zoo dataset)
+"""
+__author__ = 'georgeoblapenko'
+__license__ = "GPL"
+__maintainer__ = "George Oblapenko"
+__email__ = "kunstmord@kunstmord.com"
 
-import numpy as np
+from os import path
 from skimage.io import imread
 import skimage.filter
-from skimage.morphology import convex_hull_image
 from src.dataset import UnlabeledDataSet, LabeledDataSet
 
 
-def chull(fpath):
+def otsu(fpath):
+    """
+    Returns value of otsu threshold for an image
+    """
     img = imread(fpath, as_grey=True)
     thresh = skimage.filter.threshold_otsu(img)
-    binary_img = img > thresh
 
-    chull_img = convex_hull_image(binary_img)
-    return 1. * np.count_nonzero(chull_img) / (img.shape[0] * img.shape[1])
+    return thresh
 
 
 def move_to(name):
+    """
+    Path to image folders
+    """
     datapath = path.join(path.dirname(path.realpath(__file__)), path.pardir)
     datapath = path.join(datapath, '../gzoo_data', 'images', name)
     print path.normpath(datapath)
@@ -24,6 +32,9 @@ def move_to(name):
 
 
 def labels():
+    """
+    Path to labels file
+    """
     datapath = path.join(path.dirname(path.realpath(__file__)), path.pardir)
     datapath = path.join(datapath, '../gzoo_data', 'train_solution.csv')
     return path.normpath(datapath)
@@ -36,8 +47,8 @@ traindata = LabeledDataSet(trainset_path, path.dirname(path.realpath(__file__)),
 testdata.prepopulate()
 traindata.prepopulate()
 
-traindata.extract_feature(chull)
-testdata.extract_feature(chull)
+traindata.extract_feature(otsu)
+testdata.extract_feature(otsu)
 
 t_features = traindata.return_features_numpy('all')
 print t_features.shape
