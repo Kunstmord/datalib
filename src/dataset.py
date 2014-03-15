@@ -123,7 +123,7 @@ def return_features_base(dbpath, set_object, names):
 
     Returns
     -------
-    A list of lists, each 'inside list' corresponds to a single data point, each element of the 'inside list' is a
+    return_list : list of lists, each 'inside list' corresponds to a single data point, each element of the 'inside list' is a
     feature (can be of any type)
     """
     engine = create_engine('sqlite:////' + dbpath)
@@ -160,8 +160,9 @@ def return_features_numpy_base(dbpath, set_object, points_amt, names):
 
     Returns
     -------
-    A numpy array of features, each row corresponds to a single datapoint. If a single feature is a 1d numpy array,
-    then it will be unrolled into the resulting array. Higher-dimensional numpy arrays are not supported.
+    return_array : ndarray of features, each row corresponds to a single datapoint. If a single feature
+    is a 1d numpy array, then it will be unrolled into the resulting array. Higher-dimensional numpy arrays are not
+    supported.
     """
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
@@ -222,7 +223,7 @@ def return_real_id_base(dbpath, set_object):
 
     Returns
     -------
-    A list of real_id values for the dataset (a real_id is the filename minus the suffix and prefix)
+    return_list : list of real_id values for the dataset (a real_id is the filename minus the suffix and prefix)
     """
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
@@ -244,7 +245,7 @@ def return_feature_list_base(dbpath, set_object):
 
     Returns
     -------
-    A list of strings corresponding to all available features
+    return_list : list of strings corresponding to all available features
     """
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
@@ -268,7 +269,8 @@ def return_feature_list_numpy_base(dbpath, set_object):
 
     Returns
     -------
-    A list of tuples containing the name of the feature and the length of the corresponding list or 1d numpy array
+    return_list : list of tuples containing the name of the feature and the length of the corresponding list or
+    1d numpy array
     """
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
@@ -324,6 +326,127 @@ def copy_features_base(dbpath_origin, dbpath_destination, set_object, force_copy
                 else:
                     dest_obj.features = {feature: i.features[feature]}
     return None
+
+
+def return_single_real_id_base(dbpath, set_object, object_id):
+    """
+    Generic function which returns a real_id string of an object specified by the object_id
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    object_id : int, id of object in database
+
+    Returns
+    -------
+    real_id : string
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    tmp_object = session.query(set_object).get(object_id)
+    return tmp_object.real_id
+
+
+def return_single_path_base(dbpath, set_object, object_id):
+    """
+    Generic function which returns a path (path is relative to the path_to_set stored in the database) of an object
+    specified by the object_id
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    object_id : int, id of object in database
+
+    Returns
+    -------
+    path : string
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    tmp_object = session.query(set_object).get(object_id)
+    return tmp_object.path
+
+
+def return_single_features_base(dbpath, set_object, object_id):
+    """
+    Generic function which returns the features of an object specified by the object_id
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    object_id : int, id of object in database
+
+    Returns
+    -------
+    features : dict containing the features
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    tmp_object = session.query(set_object).get(object_id)
+    return tmp_object.features
+
+
+def return_single_convert_numpy_base(dbpath, folder_path, set_object, object_id, converter, *args):
+    """
+    Generic function which converts an object specified by the object_id into a numpy array and returns the array,
+    the conversion is done by the 'converter' function
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    folder_path : string, path to folder where the files are stored
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    object_id : int, id of object in database
+    converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+    *args : optional arguments for the converter
+
+    Returns
+    -------
+    result : ndarray
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    tmp_object = session.query(set_object).get(object_id)
+    return converter(join(folder_path, tmp_object.path), *args)
+
+
+def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id, end_id, converter, *args):
+    """
+    Generic function which converts several objects, with ids in the range (start_id, end_id)
+    into a 2d numpy array and returns the array, the conversion is done by the 'converter' function
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    folder_path : string, path to folder where the files are stored
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    start_id : the id of the first object to be converted
+    end_id : the id of the last object to be converted
+    converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+    *args : optional arguments for the converter
+
+    Returns
+    -------
+    result : 2-dimensional ndarray
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    tmp_object = session.query(set_object).get(start_id)
+    converted = converter(join(folder_path, tmp_object.path), *args)
+    columns_amt = converted.shape[0]
+    return_array = np.zeros([end_id - start_id, columns_amt])
+    for i in xrange(end_id - start_id + 1):
+        tmp_object = session.query(set_object).get(start_id + i)
+        return_array[i, :] = converter(join(folder_path, tmp_object.path), *args)
+    return return_array
 
 
 class DataSetBase:
@@ -539,6 +662,86 @@ class DataSetBase:
         copy_features_base(dbpath_origin, self.dbpath, self._set_object, force_copy)
         return None
 
+    def return_single_real_id(self, object_id):
+        """
+        Returns a real_id string of an object specified by the object_id
+
+        Parameters
+        ----------
+        object_id : int, id of object in database
+
+        Returns
+        -------
+        real_id : string
+        """
+        return return_single_real_id_base(self.dbpath, self._set_object, object_id)
+
+    def return_single_path_base(self, object_id):
+        """
+        Returns a path (path is relative to the path_to_set stored in the database) of an object
+        specified by the object_id
+
+        Parameters
+        ----------
+        object_id : int, id of object in database
+
+        Returns
+        -------
+        path : string
+        """
+        return return_single_path_base(self.dbpath, self._set_object, object_id)
+
+    def return_single_features(self, object_id):
+        """
+        Returns the features of an object specified by the object_id
+
+        Parameters
+        ----------
+        object_id : int, id of object in database
+
+        Returns
+        -------
+        features : dict containing the features
+        """
+        return return_single_features_base(self.dbpath, self._set_object, object_id)
+
+    def return_single_convert_numpy(self, object_id, converter, *args):
+        """
+        Converts an object specified by the object_id into a numpy array and returns the array,
+        the conversion is done by the 'converter' function
+
+        Parameters
+        ----------
+        object_id : int, id of object in database
+        converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+        *args : optional arguments for the converter
+
+        Returns
+        -------
+        result : ndarray
+        """
+        return return_single_convert_numpy_base(self.dbpath, self.path_to_set, self._set_object, object_id, converter,
+                                                *args)
+
+    def return_multiple_convert_numpy(self, start_id, end_id, converter, *args):
+        """
+        Converts several objects, with ids in the range (start_id, end_id)
+        into a 2d numpy array and returns the array, the conversion is done by the 'converter' function
+
+        Parameters
+        ----------
+        start_id : the id of the first object to be converted
+        end_id : the id of the last object to be converted
+        converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+        *args : optional arguments for the converter
+
+        Returns
+        -------
+        result : 2-dimensional ndarray
+        """
+        return return_multiple_convert_numpy_base(self.dbpath, self.path_to_set, self._set_object, start_id, end_id,
+                                                  converter, *args)
+
 
 class UnlabeledDataSet(DataSetBase):
     """
@@ -653,3 +856,22 @@ class LabeledDataSet(DataSetBase):
                     return_array[i[0], :] = i[1].labels['original']
             session.close()
             return return_array
+
+    def return_single_labels(self, object_id):
+        """
+        Returns all labels for an object specified by the object_id
+
+        Parameters
+        ----------
+        object_id : int, id of object in database
+
+        Returns
+        -------
+        result : list of labels
+        """
+        engine = create_engine('sqlite:////' + self.dbpath)
+        trainset.Base.metadata.create_all(engine)
+        session_cl = sessionmaker(bind=engine)
+        session = session_cl()
+        tmp_object = session.query(trainset.TrainSet).get(object_id)
+        return tmp_object.labels
