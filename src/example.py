@@ -21,6 +21,13 @@ def otsu(fpath):
     return thresh
 
 
+def otsu_squared(fpath, features):
+    """
+    Returns squared value of otsu threshold for an image
+    """
+    return features['otsu'] ** 2
+
+
 def move_to(name):
     """
     Path to image folders
@@ -48,7 +55,14 @@ testdata.prepopulate()
 traindata.prepopulate()
 
 traindata.extract_feature(otsu)
+traindata.extract_feature_dependent_feature(otsu_squared)
 testdata.extract_feature(otsu)
+testdata.extract_feature_dependent_feature(otsu_squared)
 
-t_features = traindata.return_features_numpy('all')
-print t_features.shape
+train_labels = traindata.return_labels_numpy(True)
+
+train_features = traindata.return_features_numpy('all')
+test_features = testdata.return_features_numpy('all')
+print train_features.shape
+print test_features.shape
+print train_labels.shape
