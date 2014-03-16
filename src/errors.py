@@ -25,3 +25,11 @@ class EmptyDatabase(Exception):
 
     def __str__(self):
         return 'Database at ' + str(self.path) + ' is empty, run prepopulate() first'
+
+
+class WrongSize(Exception):
+    def __init__(self, name):
+        self.name = name
+
+    def __str__(self):
+        return 'Feature ' + str(self.name) + ' has wrong size, cannot dump to database'
