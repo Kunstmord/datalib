@@ -66,3 +66,5 @@ test_features = testdata.return_features_numpy('all')
 print train_features.shape
 print test_features.shape
 print train_labels.shape
+
+single_test_feature = testdata.return_features_numpy(['otsu_squared'])
