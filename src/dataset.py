@@ -100,7 +100,7 @@ def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extr
             a += 1
     elif (extractor_name not in tmp_object.features) or force_extraction is True:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features[extractor_name] = extractor(join(folder_path, i.path), tmp_object.features, *args)
+            i.features[extractor_name] = extractor(join(folder_path, i.path), i.features, *args)
             if verbose > 0:
                 if a % verbose == 0:
                     print a
