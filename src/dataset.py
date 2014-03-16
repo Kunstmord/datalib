@@ -154,7 +154,7 @@ def return_features_numpy_base(dbpath, set_object, points_amt, names):
     ----------
     dbpath : string, path to SQLite database file
     set_object : object (either TestSet or TrainSet) which is stored in the database
-    points_amt : number of data points in the database
+    points_amt : int, number of data points in the database
     names : list of strings, a list of feature names which are to be retrieved from the database, if equal to 'all',
     all features will be returned
 
@@ -449,6 +449,59 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     return return_array
 
 
+def dump_feature_base(dbpath, set_object, points_amt, feature_name, feature, force_extraction=True):
+    """
+    Generic function which dumps a list of lists or ndarray of features into database (allows to
+    copy features from a pre-existing .txt/.csv/.whatever file, for example)
+
+    Parameters
+    ----------
+    dbpath : string, path to SQLite database file
+    set_object : object (either TestSet or TrainSet) which is stored in the database
+    points_amt : int, number of data points in the database
+    feature : list of lists or ndarray, contains the data to be written to the database
+    force_extraction : boolean, if True - will overwrite any existing feature with this name
+    default value: False
+
+    Returns
+    -------
+    None
+    """
+    engine = create_engine('sqlite:////' + dbpath)
+    session_cl = sessionmaker(bind=engine)
+    session = session_cl()
+    a = 0
+
+    tmp_object = session.query(set_object).get(1)
+    if type(feature) is np.ndarray:
+        if feature.shape[0] != points_amt:
+            raise errors.WrongSize(feature_name)
+        else:
+            if tmp_object.features is None:
+                for i in session.query(set_object).order_by(set_object.id):
+                    i.features = {feature_name: feature_name[a, :]}
+                    a += 1
+            elif (feature_name not in tmp_object.features) or force_extraction is True:
+                for i in session.query(set_object).order_by(set_object.id):
+                    i.features[feature_name] = feature_name[a, :]
+                    a += 1
+    else:
+        if len(feature) != points_amt:
+            raise errors.WrongSize(feature_name)
+        else:
+            if tmp_object.features is None:
+                for i in session.query(set_object).order_by(set_object.id):
+                    i.features = {feature_name: feature_name[a]}
+                    a += 1
+            elif (feature_name not in tmp_object.features) or force_extraction is True:
+                for i in session.query(set_object).order_by(set_object.id):
+                    i.features[feature_name] = feature_name[a]
+                    a += 1
+    session.commit()
+    session.close()
+    return None
+
+
 class DataSetBase:
     """
     Generic class for a data set. Assumes that each data point is a separate file in the same directory.
@@ -731,7 +784,8 @@ class DataSetBase:
         Parameters
         ----------
         start_id : the id of the first object to be converted
-        end_id : the id of the last object to be converted
+        end_id : the id of the last object to be converted, if equal to -1, will convert all data points in range
+        (start_id, <id of last element in database>)
         converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
         *args : optional arguments for the converter
 
@@ -739,8 +793,28 @@ class DataSetBase:
         -------
         result : 2-dimensional ndarray
         """
+        if end_id == -1:
+            end_id = self.points_amt
         return return_multiple_convert_numpy_base(self.dbpath, self.path_to_set, self._set_object, start_id, end_id,
                                                   converter, *args)
+
+    def dump_feature(self, feature_name, feature, force_extraction=True):
+        """
+        Dumps a list of lists or ndarray of features into database (allows to
+        copy features from a pre-existing .txt/.csv/.whatever file, for example)
+
+        Parameters
+        ----------
+        feature : list of lists or ndarray, contains the data to be written to the database
+        force_extraction : boolean, if True - will overwrite any existing feature with this name
+        default value: False
+
+        Returns
+        -------
+        None
+        """
+        dump_feature_base(self.dbpath, self._set_object, self.points_amt, feature_name, feature, force_extraction)
+        return None
 
 
 class UnlabeledDataSet(DataSetBase):
