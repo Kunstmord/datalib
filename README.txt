@@ -1,8 +1,9 @@
 =============
-datalib
+mldatalib
 =============
 
-Provides a library which simplifies processing and extracting features (for machine learning) from files.
+mldatalib (Machine Learning Data Library) provides a Python library which simplifies processing and extracting features
+(for machine learning) from files.
 Stores features in a SQLite database, has label transformation options, functions which convert features to NumPy arrays,
 etc.
 Original idea and feature list by Viktor Evstratov (viktor.evst@gmail.com).
