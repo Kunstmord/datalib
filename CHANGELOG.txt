@@ -1,1 +1,2 @@
+v 0.1.2 - delete_feaure fixed
 v 0.1.1 - delete_feature added
