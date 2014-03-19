@@ -16,7 +16,7 @@ class MutableDict(Mutable, dict):
         else:
             return value
 
-    def __delitem(self, key):
+    def __delitem__(self, key):
         dict.__delitem__(self, key)
         self.changed()
 
