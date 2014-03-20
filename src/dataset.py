@@ -441,8 +441,11 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     session = session_cl()
     tmp_object = session.query(set_object).get(start_id)
     converted = converter(join(folder_path, tmp_object.path), *args)
-    columns_amt = converted.shape[0]
-    return_array = np.zeros([end_id - start_id, columns_amt])
+    if len(converted.shape) == 0:
+        columns_amt = 1
+    else:
+        columns_amt = converted.shape[0]
+    return_array = np.zeros([end_id - start_id + 1, columns_amt])
     for i in xrange(end_id - start_id + 1):
         tmp_object = session.query(set_object).get(start_id + i)
         return_array[i, :] = converter(join(folder_path, tmp_object.path), *args)

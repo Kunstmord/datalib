@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='mldatalib',
-      version='0.1.2',
+      version='0.1.3',
       description='Library for data analysis - extracting, storing and retrieving features',
       author='George Oblapenko',
       author_email='kunstmord@kunstmord.com',
