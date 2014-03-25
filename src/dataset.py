@@ -14,7 +14,8 @@ import errors
 from misc import cutoff_filename
 
 
-def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False, verbose=0, **kwargs):
+def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False, verbose=0,
+                         add_args=None):
     """
     Generic function which extracts a feature and stores it in the database
 
@@ -23,13 +24,13 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
     dbpath : string, path to SQLite database file
     folder_path : string, path to folder where the files are stored
     set_object : object (either TestSet or TrainSet) which is stored in the database
-    extractor : function, which takes the path of a data point and **kwargs as parameters and returns a feature
+    extractor : function, which takes the path of a data point and *args as parameters and returns a feature
     force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
     exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
     default value: False
     verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
     ever verbose steps (for example, verbose=500 will print 0, 500, 1000 etc.). default value: 0
-    **kwargs : optional arguments for the extractor
+    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
     Returns
     -------
@@ -44,14 +45,14 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
     tmp_object = session.query(set_object).get(1)
     if tmp_object.features is None:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features = {extractor_name: extractor(join(folder_path, i.path), **kwargs)}
+            i.features = {extractor_name: extractor(join(folder_path, i.path), add_args)}
             if verbose > 0:
                 if a % verbose == 0:
                     print a
             a += 1
     elif (extractor_name not in tmp_object.features) or force_extraction is True:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features[extractor_name] = extractor(join(folder_path, i.path), **kwargs)
+            i.features[extractor_name] = extractor(join(folder_path, i.path), add_args)
             if verbose > 0:
                 if a % verbose == 0:
                     print a
@@ -62,7 +63,7 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
 
 
 def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False,
-                                           verbose=0, **kwargs):
+                                           verbose=0, add_args=None):
     """
     Generic function which extracts a feature which may be dependent on other features and stores it in the database
 
@@ -71,14 +72,14 @@ def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extr
     dbpath : string, path to SQLite database file
     folder_path : string, path to folder where the files are stored
     set_object : object (either TestSet or TrainSet) which is stored in the database
-    extractor : function, which takes the path of a data point, a dictionary of all other features and **kwargs as
+    extractor : function, which takes the path of a data point, a dictionary of all other features and *args as
     parameters and returns a feature
     force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
     exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
     default value: False
     verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
     ever verbose steps (for example, verbose=500 will print 0, 500, 1000 etc.). default value: 0
-    **kwargs : optional arguments for the extractor
+    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
     Returns
     -------
@@ -93,14 +94,14 @@ def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extr
     tmp_object = session.query(set_object).get(1)
     if tmp_object.features is None:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features = {extractor_name: extractor(join(folder_path, i.path), None, **kwargs)}
+            i.features = {extractor_name: extractor(join(folder_path, i.path), None, add_args)}
             if verbose > 0:
                 if a % verbose == 0:
                     print a
             a += 1
     elif (extractor_name not in tmp_object.features) or force_extraction is True:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features[extractor_name] = extractor(join(folder_path, i.path), i.features, **kwargs)
+            i.features[extractor_name] = extractor(join(folder_path, i.path), i.features, add_args)
             if verbose > 0:
                 if a % verbose == 0:
                     print a
@@ -123,8 +124,8 @@ def return_features_base(dbpath, set_object, names):
 
     Returns
     -------
-    return_list : list of lists, each 'inside list' corresponds to a single data point, each element of the 'inside list' is a
-    feature (can be of any type)
+    return_list : list of lists, each 'inside list' corresponds to a single data point, each element of the 'inside
+    list' is a feature (can be of any type)
     """
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
@@ -209,6 +210,7 @@ def return_features_numpy_base(dbpath, set_object, points_amt, names):
                     else:
                         return_array[i[0], counter] = feature_val
                         counter += 1
+    session.close()
     return return_array
 
 
@@ -231,6 +233,7 @@ def return_real_id_base(dbpath, set_object):
     return_list = []
     for i in session.query(set_object).order_by(set_object.id):
         return_list.append(i.real_id)
+    session.close()
     return return_list
 
 
@@ -254,6 +257,7 @@ def return_feature_list_base(dbpath, set_object):
     tmp_object = session.query(set_object).get(1)
     for feature in tmp_object.features:
         return_list.append(feature)
+    session.close()
     return return_list
 
 
@@ -283,6 +287,7 @@ def return_feature_list_numpy_base(dbpath, set_object):
         else:
             flength = 1
         return_list.append((feature, flength))
+    session.close()
     return return_list
 
 
@@ -325,6 +330,9 @@ def copy_features_base(dbpath_origin, dbpath_destination, set_object, force_copy
                         dest_obj.features[feature] = i.features[feature]
                 else:
                     dest_obj.features = {feature: i.features[feature]}
+    session_origin.close()
+    session_destination.commit()
+    session_destination.close()
     return None
 
 
@@ -346,6 +354,7 @@ def return_single_real_id_base(dbpath, set_object, object_id):
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
     tmp_object = session.query(set_object).get(object_id)
+    session.close()
     return tmp_object.real_id
 
 
@@ -368,6 +377,7 @@ def return_single_path_base(dbpath, set_object, object_id):
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
     tmp_object = session.query(set_object).get(object_id)
+    session.close()
     return tmp_object.path
 
 
@@ -389,10 +399,11 @@ def return_single_features_base(dbpath, set_object, object_id):
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
     tmp_object = session.query(set_object).get(object_id)
+    session.close()
     return tmp_object.features
 
 
-def return_single_convert_numpy_base(dbpath, folder_path, set_object, object_id, converter, **kwargs):
+def return_single_convert_numpy_base(dbpath, folder_path, set_object, object_id, converter, add_args=None):
     """
     Generic function which converts an object specified by the object_id into a numpy array and returns the array,
     the conversion is done by the 'converter' function
@@ -403,8 +414,8 @@ def return_single_convert_numpy_base(dbpath, folder_path, set_object, object_id,
     folder_path : string, path to folder where the files are stored
     set_object : object (either TestSet or TrainSet) which is stored in the database
     object_id : int, id of object in database
-    converter : function, which takes the path of a data point and **kwargs as parameters and returns a numpy array
-    **kwargs : optional arguments for the converter
+    converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
     Returns
     -------
@@ -414,10 +425,11 @@ def return_single_convert_numpy_base(dbpath, folder_path, set_object, object_id,
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
     tmp_object = session.query(set_object).get(object_id)
-    return converter(join(folder_path, tmp_object.path), **kwargs)
+    session.close()
+    return converter(join(folder_path, tmp_object.path), add_args)
 
 
-def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id, end_id, converter, **kwargs):
+def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id, end_id, converter, add_args=None):
     """
     Generic function which converts several objects, with ids in the range (start_id, end_id)
     into a 2d numpy array and returns the array, the conversion is done by the 'converter' function
@@ -429,8 +441,8 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     set_object : object (either TestSet or TrainSet) which is stored in the database
     start_id : the id of the first object to be converted
     end_id : the id of the last object to be converted
-    converter : function, which takes the path of a data point and **kwargs as parameters and returns a numpy array
-    **kwargs : optional arguments for the converter
+    converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
     Returns
     -------
@@ -440,7 +452,7 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
     tmp_object = session.query(set_object).get(start_id)
-    converted = converter(join(folder_path, tmp_object.path), **kwargs)
+    converted = converter(join(folder_path, tmp_object.path), add_args)
     if len(converted.shape) == 0:
         columns_amt = 1
     else:
@@ -448,7 +460,8 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     return_array = np.zeros([end_id - start_id + 1, columns_amt])
     for i in xrange(end_id - start_id + 1):
         tmp_object = session.query(set_object).get(start_id + i)
-        return_array[i, :] = converter(join(folder_path, tmp_object.path), **kwargs)
+        return_array[i, :] = converter(join(folder_path, tmp_object.path), add_args)
+    session.close()
     return return_array
 
 
@@ -526,6 +539,7 @@ def delete_feature_base(dbpath, set_object, name):
     if tmp_object.features is not None and name in tmp_object.features:
         for i in session.query(set_object).order_by(set_object.id):
             del i.features[name]
+    session.commit()
     session.close()
     return None
 
@@ -598,18 +612,18 @@ class DataSetBase:
             session.close()
         return None
 
-    def extract_feature(self, extractor, force_extraction=False, verbose=0, **kwargs):
+    def extract_feature(self, extractor, force_extraction=False, verbose=0, add_args=None):
         """
         Extracts a feature and stores it in the database
 
         Parameters
         ----------
-        extractor : function, which takes the path of a data point and **kwargs as parameters and returns a feature
+        extractor : function, which takes the path of a data point and *args as parameters and returns a feature
         force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
         exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
         default value: False
         verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
-        **kwargs : optional arguments for the extractor
+        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
         Returns
         -------
@@ -619,21 +633,21 @@ class DataSetBase:
             raise errors.EmptyDatabase(self.dbpath)
         else:
             return extract_feature_base(self.dbpath, self.path_to_set, self._set_object, extractor, force_extraction,
-                                        verbose, **kwargs)
+                                        verbose, add_args)
 
-    def extract_feature_dependent_feature(self, extractor, force_extraction=False, verbose=0, **kwargs):
+    def extract_feature_dependent_feature(self, extractor, force_extraction=False, verbose=0, add_args=None):
         """
         Extracts a feature which may be dependent on other features and stores it in the database
 
         Parameters
         ----------
-        extractor : function, which takes the path of a data point, a dictionary of all other features and **kwargs as
+        extractor : function, which takes the path of a data point, a dictionary of all other features and *args as
         parameters and returns a feature
         force_extraction : boolean, if True - will re-extract feature even if a feature with this name already
         exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
         default value: False
         verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
-        **kwargs : optional arguments for the extractor
+        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
         Returns
         -------
@@ -643,7 +657,7 @@ class DataSetBase:
             raise errors.EmptyDatabase(self.dbpath)
         else:
             return extract_feature_dependent_feature_base(self.dbpath, self.path_to_set, self._set_object, extractor,
-                                                          force_extraction, verbose, **kwargs)
+                                                          force_extraction, verbose, add_args)
 
     def return_features(self, names='all'):
         """
@@ -786,7 +800,7 @@ class DataSetBase:
         """
         return return_single_features_base(self.dbpath, self._set_object, object_id)
 
-    def return_single_convert_numpy(self, object_id, converter, **kwargs):
+    def return_single_convert_numpy(self, object_id, converter, add_args=None):
         """
         Converts an object specified by the object_id into a numpy array and returns the array,
         the conversion is done by the 'converter' function
@@ -794,17 +808,17 @@ class DataSetBase:
         Parameters
         ----------
         object_id : int, id of object in database
-        converter : function, which takes the path of a data point and **kwargs as parameters and returns a numpy array
-        **kwargs : optional arguments for the converter
+        converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
         Returns
         -------
         result : ndarray
         """
         return return_single_convert_numpy_base(self.dbpath, self.path_to_set, self._set_object, object_id, converter,
-                                                **kwargs)
+                                                add_args)
 
-    def return_multiple_convert_numpy(self, start_id, end_id, converter, **kwargs):
+    def return_multiple_convert_numpy(self, start_id, end_id, converter, add_args=None):
         """
         Converts several objects, with ids in the range (start_id, end_id)
         into a 2d numpy array and returns the array, the conversion is done by the 'converter' function
@@ -814,8 +828,8 @@ class DataSetBase:
         start_id : the id of the first object to be converted
         end_id : the id of the last object to be converted, if equal to -1, will convert all data points in range
         (start_id, <id of last element in database>)
-        converter : function, which takes the path of a data point and **kwargs as parameters and returns a numpy array
-        **kwargs : optional arguments for the converter
+        converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
+        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
 
         Returns
         -------
@@ -824,7 +838,7 @@ class DataSetBase:
         if end_id == -1:
             end_id = self.points_amt
         return return_multiple_convert_numpy_base(self.dbpath, self.path_to_set, self._set_object, start_id, end_id,
-                                                  converter, **kwargs)
+                                                  converter, add_args)
 
     def dump_feature(self, feature_name, feature, force_extraction=True):
         """
