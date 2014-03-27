@@ -15,7 +15,7 @@ from misc import cutoff_filename
 
 
 def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False, verbose=0,
-                         add_args=None):
+                         add_args=None, custom_name=None):
     """
     Generic function which extracts a feature and stores it in the database
 
@@ -30,13 +30,19 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
     default value: False
     verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
     ever verbose steps (for example, verbose=500 will print 0, 500, 1000 etc.). default value: 0
-    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). if None, the
+    extractor should take only one input argument - the file path. default value: None
+    custom_name : string, optional name for the feature (it will be stored in the database with the custom_name
+    instead of extractor function name). if None, the extractor function name will be used. default value: None
 
     Returns
     -------
     None
     """
-    extractor_name = extractor.__name__
+    if custom_name is None:
+        extractor_name = extractor.__name__
+    else:
+        extractor_name = custom_name
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
@@ -45,14 +51,20 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
     tmp_object = session.query(set_object).get(1)
     if tmp_object.features is None:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features = {extractor_name: extractor(join(folder_path, i.path), add_args)}
+            if add_args is None:
+                i.features = {extractor_name: extractor(join(folder_path, i.path))}
+            else:
+                i.features = {extractor_name: extractor(join(folder_path, i.path), add_args)}
             if verbose > 0:
                 if a % verbose == 0:
                     print a
             a += 1
     elif (extractor_name not in tmp_object.features) or force_extraction is True:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features[extractor_name] = extractor(join(folder_path, i.path), add_args)
+            if add_args is None:
+                i.features[extractor_name] = extractor(join(folder_path, i.path))
+            else:
+                i.features[extractor_name] = extractor(join(folder_path, i.path), add_args)
             if verbose > 0:
                 if a % verbose == 0:
                     print a
@@ -63,7 +75,7 @@ def extract_feature_base(dbpath, folder_path, set_object, extractor, force_extra
 
 
 def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extractor, force_extraction=False,
-                                           verbose=0, add_args=None):
+                                           verbose=0, add_args=None, custom_name=None):
     """
     Generic function which extracts a feature which may be dependent on other features and stores it in the database
 
@@ -79,13 +91,19 @@ def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extr
     default value: False
     verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
     ever verbose steps (for example, verbose=500 will print 0, 500, 1000 etc.). default value: 0
-    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). if None, the
+    extractor should take only two input arguments - the file path and a dictionary of features. default value: None
+    custom_name : string, optional name for the feature (it will be stored in the database with the custom_name
+    instead of extractor function name). if None, the extractor function name will be used. default value: None
 
     Returns
     -------
     None
     """
-    extractor_name = extractor.__name__
+    if custom_name is None:
+        extractor_name = extractor.__name__
+    else:
+        extractor_name = custom_name
     engine = create_engine('sqlite:////' + dbpath)
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
@@ -94,14 +112,20 @@ def extract_feature_dependent_feature_base(dbpath, folder_path, set_object, extr
     tmp_object = session.query(set_object).get(1)
     if tmp_object.features is None:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features = {extractor_name: extractor(join(folder_path, i.path), None, add_args)}
+            if add_args is None:
+                i.features = {extractor_name: extractor(join(folder_path, i.path), None)}
+            else:
+                i.features = {extractor_name: extractor(join(folder_path, i.path), None, add_args)}
             if verbose > 0:
                 if a % verbose == 0:
                     print a
             a += 1
     elif (extractor_name not in tmp_object.features) or force_extraction is True:
         for i in session.query(set_object).order_by(set_object.id):
-            i.features[extractor_name] = extractor(join(folder_path, i.path), i.features, add_args)
+            if add_args is None:
+                i.features[extractor_name] = extractor(join(folder_path, i.path), i.features)
+            else:
+                i.features[extractor_name] = extractor(join(folder_path, i.path), i.features, add_args)
             if verbose > 0:
                 if a % verbose == 0:
                     print a
@@ -415,7 +439,8 @@ def return_single_convert_numpy_base(dbpath, folder_path, set_object, object_id,
     set_object : object (either TestSet or TrainSet) which is stored in the database
     object_id : int, id of object in database
     converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
-    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+    add_args : optional arguments for the converter (list/dictionary/tuple/whatever). if None, the
+    converter should take only one input argument - the file path. default value: None
 
     Returns
     -------
@@ -426,7 +451,10 @@ def return_single_convert_numpy_base(dbpath, folder_path, set_object, object_id,
     session = session_cl()
     tmp_object = session.query(set_object).get(object_id)
     session.close()
-    return converter(join(folder_path, tmp_object.path), add_args)
+    if add_args is None:
+        return converter(join(folder_path, tmp_object.path))
+    else:
+        return converter(join(folder_path, tmp_object.path), add_args)
 
 
 def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id, end_id, converter, add_args=None):
@@ -442,7 +470,8 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     start_id : the id of the first object to be converted
     end_id : the id of the last object to be converted
     converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
-    add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+    add_args : optional arguments for the converter (list/dictionary/tuple/whatever). if None, the
+    converter should take only one input argument - the file path. default value: None
 
     Returns
     -------
@@ -452,7 +481,10 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     session_cl = sessionmaker(bind=engine)
     session = session_cl()
     tmp_object = session.query(set_object).get(start_id)
-    converted = converter(join(folder_path, tmp_object.path), add_args)
+    if add_args is None:
+        converted = converter(join(folder_path, tmp_object.path))
+    else:
+        converted = converter(join(folder_path, tmp_object.path), add_args)
     if len(converted.shape) == 0:
         columns_amt = 1
     else:
@@ -460,7 +492,10 @@ def return_multiple_convert_numpy_base(dbpath, folder_path, set_object, start_id
     return_array = np.zeros([end_id - start_id + 1, columns_amt])
     for i in xrange(end_id - start_id + 1):
         tmp_object = session.query(set_object).get(start_id + i)
-        return_array[i, :] = converter(join(folder_path, tmp_object.path), add_args)
+        if add_args is None:
+            return_array[i, :] = converter(join(folder_path, tmp_object.path))
+        else:
+            return_array[i, :] = converter(join(folder_path, tmp_object.path), add_args)
     session.close()
     return return_array
 
@@ -612,7 +647,7 @@ class DataSetBase:
             session.close()
         return None
 
-    def extract_feature(self, extractor, force_extraction=False, verbose=0, add_args=None):
+    def extract_feature(self, extractor, force_extraction=False, verbose=0, add_args=None, custom_name=None):
         """
         Extracts a feature and stores it in the database
 
@@ -623,7 +658,10 @@ class DataSetBase:
         exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
         default value: False
         verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
-        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). if None, the
+        extractor should take only one input argument - the file path. default value: None
+        custom_name : string, optional name for the feature (it will be stored in the database with the custom_name
+        instead of extractor function name). if None, the extractor function name will be used. default value: None
 
         Returns
         -------
@@ -633,9 +671,10 @@ class DataSetBase:
             raise errors.EmptyDatabase(self.dbpath)
         else:
             return extract_feature_base(self.dbpath, self.path_to_set, self._set_object, extractor, force_extraction,
-                                        verbose, add_args)
+                                        verbose, add_args, custom_name)
 
-    def extract_feature_dependent_feature(self, extractor, force_extraction=False, verbose=0, add_args=None):
+    def extract_feature_dependent_feature(self, extractor, force_extraction=False, verbose=0, add_args=None,
+                                          custom_name=None):
         """
         Extracts a feature which may be dependent on other features and stores it in the database
 
@@ -647,7 +686,10 @@ class DataSetBase:
         exists in the database, otherwise, will only extract if the feature doesn't exist in the database.
         default value: False
         verbose : int, if bigger than 0, will print the current number of the file for which data is being extracted
-        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). if None, the
+        extractor should take only one input argument - the file path. default value: None
+        custom_name : string, optional name for the feature (it will be stored in the database with the custom_name
+        instead of extractor function name). if None, the extractor function name will be used. default value: None
 
         Returns
         -------
@@ -657,7 +699,7 @@ class DataSetBase:
             raise errors.EmptyDatabase(self.dbpath)
         else:
             return extract_feature_dependent_feature_base(self.dbpath, self.path_to_set, self._set_object, extractor,
-                                                          force_extraction, verbose, add_args)
+                                                          force_extraction, verbose, add_args, custom_name)
 
     def return_features(self, names='all'):
         """
@@ -809,7 +851,8 @@ class DataSetBase:
         ----------
         object_id : int, id of object in database
         converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
-        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+        add_args : optional arguments for the converter (list/dictionary/tuple/whatever). if None, the
+        converter should take only one input argument - the file path. default value: None
 
         Returns
         -------
@@ -829,7 +872,8 @@ class DataSetBase:
         end_id : the id of the last object to be converted, if equal to -1, will convert all data points in range
         (start_id, <id of last element in database>)
         converter : function, which takes the path of a data point and *args as parameters and returns a numpy array
-        add_args : optional arguments for the extractor (list/dictionary/tuple/whatever). default value: None
+        add_args : optional arguments for the converter (list/dictionary/tuple/whatever). if None, the
+        converter should take only one input argument - the file path. default value: None
 
         Returns
         -------
