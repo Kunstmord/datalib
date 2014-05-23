@@ -1,3 +1,7 @@
+PLEASE NOTE:
+This library will is undergoing a MAJOR rewrite (as in, absolutely everything will be done in a different and incompatible way).
+So, consider this a proof-of-concept and nothing else. You can use it, but the functionality is limited and will not be expanded.
+
 =============
 mldatalib
 =============
